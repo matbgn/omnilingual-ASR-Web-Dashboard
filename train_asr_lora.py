@@ -48,9 +48,8 @@ class DataCollatorCTCWithPadding:
 
 # --- Configuration ---
 MODEL_ID = "facebook/mms-1b-all"
-DATASET_DIR = "/mnt/sdc1/Bangla_ASR/combined_dataset"
+DATASET_DIR = "/workspace/combined_dataset"
 OUTPUT_DIR = "mms-1b-bangla-lora-a40"
-PRETRAINED_ADAPTER_PATH = "mms-1b-bangla-lora/final_model"  # Load from previous training
 # CSV file name in the dataset directory
 CSV_FILE = "dataset.csv" 
 
@@ -136,13 +135,6 @@ def main():
     )
     
     model = get_peft_model(model, peft_config)
-    
-    # Load pretrained adapter if it exists
-    if os.path.exists(PRETRAINED_ADAPTER_PATH):
-        print(f"Loading pretrained adapter from {PRETRAINED_ADAPTER_PATH}...")
-        from peft import PeftModel
-        model = PeftModel.from_pretrained(model, PRETRAINED_ADAPTER_PATH, is_trainable=True)
-        print("Adapter loaded successfully! Continuing training...")
     
     model.print_trainable_parameters()
     

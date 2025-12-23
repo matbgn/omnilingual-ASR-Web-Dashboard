@@ -10,11 +10,16 @@ echo "Setting up Bangla ASR Fine-Tuning Environment"
 echo "================================================"
 
 # 1. Create Virtual Environment
-if [ ! -d "$VENV_NAME" ]; then
-    echo "Creating virtual environment: $VENV_NAME..."
+if [ ! -f "$VENV_NAME/bin/python" ]; then
+    echo "Creating or repairing virtual environment: $VENV_NAME..."
+    # Clean up if directory exists but is broken
+    if [ -d "$VENV_NAME" ]; then
+        echo "Found broken venv directory, removing and recreating..."
+        rm -rf "$VENV_NAME"
+    fi
     python3 -m venv "$VENV_NAME"
 else
-    echo "Virtual environment $VENV_NAME already exists."
+    echo "Virtual environment $VENV_NAME already exists and is valid."
 fi
 
 # 2. Upgrade Pip

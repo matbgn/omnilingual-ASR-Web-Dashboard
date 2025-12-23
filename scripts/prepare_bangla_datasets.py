@@ -21,7 +21,7 @@ def setup_directories(output_dir):
         
     return output_path, audio_path
 
-def process_bangla_quantity(source_dir, output_audio_dir, limit=None):
+def process_bangla_quantity(source_dir, output_audio_dir, limit=None, move_files=False):
     """
     Process 'bangla_voice_quantity' dataset.
     - source_dir: Root of bangla_voice_quantity
@@ -63,7 +63,8 @@ def process_bangla_quantity(source_dir, output_audio_dir, limit=None):
     success_count = 0
     missing_count = 0
     
-    print("Copying files...")
+    action = "Moving" if move_files else "Copying"
+    print(f"{action} files...")
     # Using tqdm for progress tracking
     for idx, row in tqdm(df.iterrows(), total=total, unit="file"):
         filename = row['File Name']
@@ -84,9 +85,12 @@ def process_bangla_quantity(source_dir, output_audio_dir, limit=None):
         new_filename = f"bq_{src_file.name}"
         dst_file = output_audio_dir / new_filename
         
-        # Copy file
+        # Copy or move file
         try:
-            shutil.copy2(src_file, dst_file)
+            if move_files:
+                shutil.move(str(src_file), str(dst_file))
+            else:
+                shutil.copy2(src_file, dst_file)
             dataset_entries.append({
                 "audio_path": f"audios/{new_filename}",
                 "sentence": transcript,
@@ -94,12 +98,13 @@ def process_bangla_quantity(source_dir, output_audio_dir, limit=None):
             })
             success_count += 1
         except Exception as e:
-            print(f"Error copying {src_file}: {e}")
+            action_verb = "moving" if move_files else "copying"
+            print(f"Error {action_verb} {src_file}: {e}")
             
     print(f"Bangla Quantity: Processed {success_count} files ({missing_count} missing).")
     return dataset_entries
 
-def process_kaggle_bangla(source_dir, output_audio_dir, limit=None):
+def process_kaggle_bangla(source_dir, output_audio_dir, limit=None, move_files=False):
     """
     Process 'kaggle_bangla' dataset.
     - source_dir: Root of kaggle_bangla
@@ -130,7 +135,8 @@ def process_kaggle_bangla(source_dir, output_audio_dir, limit=None):
     success_count = 0
     missing_count = 0
     
-    print("Copying files...")
+    action = "Moving" if move_files else "Copying"
+    print(f"{action} files...")
     for idx, row in tqdm(df.iterrows(), total=total, unit="file"):
         file_id = row['id']
         sentence = row['sentence']
@@ -147,9 +153,12 @@ def process_kaggle_bangla(source_dir, output_audio_dir, limit=None):
         new_filename = f"kb_{file_id}.mp3"
         dst_file = output_audio_dir / new_filename
         
-        # Copy file
+        # Copy or move file
         try:
-            shutil.copy2(src_file, dst_file)
+            if move_files:
+                shutil.move(str(src_file), str(dst_file))
+            else:
+                shutil.copy2(src_file, dst_file)
             dataset_entries.append({
                 "audio_path": f"audios/{new_filename}",
                 "sentence": sentence,
@@ -157,17 +166,19 @@ def process_kaggle_bangla(source_dir, output_audio_dir, limit=None):
             })
             success_count += 1
         except Exception as e:
-            print(f"Error copying {src_file}: {e}")
+            action_verb = "moving" if move_files else "copying"
+            print(f"Error {action_verb} {src_file}: {e}")
 
     print(f"Kaggle Bangla: Processed {success_count} files ({missing_count} missing).")
     return dataset_entries
 
 def main():
     parser = argparse.ArgumentParser(description="Combine and prepare Bangla ASR datasets.")
-    parser.add_argument("--bq_dir", default="/mnt/sdc1/Bangla_ASR/bangla_voice_quantity", help="Path to Bangla Quantity dataset")
-    parser.add_argument("--kb_dir", default="/mnt/sdc1/Bangla_ASR/kaggle_bangla", help="Path to Kaggle Bangla dataset")
-    parser.add_argument("--output_dir", default="/mnt/sdc1/Bangla_ASR/combined_dataset", help="Path to updated dataset directory")
+    parser.add_argument("--bq_dir", default="/workspace/bangla_voice_quantity", help="Path to Bangla Quantity dataset")
+    parser.add_argument("--kb_dir", default="/workspace/kaggle_bangla", help="Path to Kaggle Bangla dataset")
+    parser.add_argument("--output_dir", default="/workspace/combined_dataset", help="Path to updated dataset directory")
     parser.add_argument("--limit", type=int, help="Limit number of files per dataset for testing")
+    parser.add_argument("--move", action="store_true", help="Move files instead of copying (saves disk space)")
     
     args = parser.parse_args()
     
@@ -177,12 +188,12 @@ def main():
     all_data = []
     
     # Process Dataset 1
-    bq_data = process_bangla_quantity(args.bq_dir, audio_path, args.limit)
+    bq_data = process_bangla_quantity(args.bq_dir, audio_path, args.limit, args.move)
     all_data.extend(bq_data)
     
     # Process Dataset 2
     # Note: User mentioned kaggle_bangla uses 'train_mp3s' as folder
-    kb_data = process_kaggle_bangla(args.kb_dir, audio_path, args.limit)
+    kb_data = process_kaggle_bangla(args.kb_dir, audio_path, args.limit, args.move)
     all_data.extend(kb_data)
     
     print(f"\n--- Finalizing ---")
