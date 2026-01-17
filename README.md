@@ -92,6 +92,22 @@ mkdir -p ~/.config/fairseq2/assets/cards/models
 ln -sf "$(pwd)/src/omnilingual_asr/cards/models/omniasr_local.yaml" ~/.config/fairseq2/assets/cards/models/omniasr_local.yaml
 ```
 
+### 3. Blackwell GPU Support (RTX 50 Series)
+
+If you have an **NVIDIA RTX 5090** or other Blackwell-based GPU (`sm_120`), the standard PyTorch 2.6.0/CUDA 12.4 build will not work. You need PyTorch with **CUDA 12.8** support and a compatible fairseq2 nightly build.
+
+After running `bash setup_env.sh`, replace the PyTorch and fairseq2 installations with:
+
+```bash
+# Step 1: Install PyTorch 2.9.1 with CUDA 12.8
+./asr_venv/bin/pip install torch==2.9.1 torchaudio --index-url https://download.pytorch.org/whl/cu128 --force-reinstall
+
+# Step 2: Install fairseq2 nightly for PyTorch 2.9.1 cu128
+./asr_venv/bin/pip install fairseq2 fairseq2n --pre --extra-index-url https://fair.pkg.atmeta.com/fairseq2/whl/nightly/pt2.9.1/cu128 --force-reinstall
+```
+
+> **Note**: Blackwell support requires nightly builds which may be less stable than the default configuration. Check the [fairseq2 variants](https://github.com/facebookresearch/fairseq2#variants) for updated compatibility information.
+
 ---
 
 ## 📁 Model Configuration
