@@ -154,11 +154,12 @@ app.config["UPLOAD_FOLDER"].mkdir(parents=True, exist_ok=True)
 
 # Initialize pipeline at startup
 _pipeline: Optional[ASRInferencePipeline] = None
-DEFAULT_MODEL_CARD = "omniASR_LLM_1B_local"
+DEFAULT_MODEL_CARD = "omniASR_LLM_Unlimited_300M_v2_local"
 
 # Example: { "Display Name": "model_card_name" }
 AVAILABLE_MODELS = {
-    "LLM 1B (Default)": "omniASR_LLM_1B_local",
+    "Unlimited 300M v2 (Default)": "omniASR_LLM_Unlimited_300M_v2_local",
+    "LLM 1B": "omniASR_LLM_1B_local",
     "CTC 1B": "omniASR_CTC_1B_local",
     "LLM 3B": "omniASR_LLM_3B_local"
     }
