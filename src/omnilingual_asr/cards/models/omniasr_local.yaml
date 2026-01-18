@@ -22,34 +22,6 @@ tokenizer: https://dl.fbaipublicfiles.com/mms/omniASR_tokenizer_written_v2.model
 
 ---
 
-name: omniASR_W2V_300M_local
-model_family: wav2vec2
-model_arch: large_lv60k
-checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-W2V-300M.pt
-
----
-
-name: omniASR_W2V_1B_local
-model_family: wav2vec2
-model_arch: 1b
-checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-W2V-1B.pt
-
----
-
-name: omniASR_W2V_3B_local
-model_family: wav2vec2
-model_arch: 3b
-checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-W2V-3B.pt
-
----
-
-name: omniASR_W2V_7B_local
-model_family: wav2vec2
-model_arch: 7b
-checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-W2V-7B.pt
-
----
-
 name: omniASR_CTC_300M_local
 model_family: wav2vec2_asr
 model_arch: 300m
