@@ -1,0 +1,125 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+name: omniASR_tokenizer_local
+tokenizer_family: char_tokenizer
+tokenizer: https://dl.fbaipublicfiles.com/mms/omniASR_tokenizer.model
+
+---
+
+name: omniASR_tokenizer_v7_local
+tokenizer_family: char_tokenizer
+tokenizer: https://dl.fbaipublicfiles.com/mms/omniASR_tokenizer_v7.model
+
+---
+
+name: omniASR_tokenizer_written_v2_local
+tokenizer_family: char_tokenizer
+tokenizer: https://dl.fbaipublicfiles.com/mms/omniASR_tokenizer_written_v2.model
+
+---
+
+name: omniASR_CTC_300M_local
+model_family: wav2vec2_asr
+model_arch: 300m
+checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-CTC-300M.pt
+tokenizer_ref: omniASR_tokenizer_local
+
+---
+
+name: omniASR_CTC_1B_local
+model_family: wav2vec2_asr
+model_arch: 1b
+checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-CTC-1B.pt
+tokenizer_ref: omniASR_tokenizer_local
+
+---
+
+name: omniASR_CTC_3B_local
+model_family: wav2vec2_asr
+model_arch: 3b
+checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-CTC-3B.pt
+tokenizer_ref: omniASR_tokenizer_local
+
+---
+
+name: omniASR_CTC_7B_local
+model_family: wav2vec2_asr
+model_arch: 7b
+checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-CTC-7B.pt
+tokenizer_ref: omniASR_tokenizer_local
+
+---
+
+name: omniASR_LLM_300M_local
+model_family: wav2vec2_llama
+model_arch: 300m
+checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-LLM-300M.pt
+tokenizer_ref: omniASR_tokenizer_local
+
+---
+
+name: omniASR_LLM_1B_local
+model_family: wav2vec2_llama
+model_arch: 1b
+checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-LLM-1B.pt
+tokenizer_ref: omniASR_tokenizer_local
+
+---
+
+name: omniASR_LLM_3B_local
+model_family: wav2vec2_llama
+model_arch: 3b
+checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-LLM-3B.pt
+tokenizer_ref: omniASR_tokenizer_local
+
+---
+
+name: omniASR_LLM_7B_local
+model_family: wav2vec2_llama
+model_arch: 7b
+checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-LLM-7B.pt
+tokenizer_ref: omniASR_tokenizer_v7_local
+
+---
+
+name: omniASR_LLM_7B_ZS_local
+model_family: wav2vec2_llama
+model_arch: 7b_zs
+checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-LLM-7B-ZS.pt
+tokenizer_ref: omniASR_tokenizer_local
+
+---
+
+name: omniASR_LLM_Unlimited_300M_v2_local
+model_family: wav2vec2_llama
+model_arch: 300m_unlimited_v2
+checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-LLM-Unlimited-300M-v2.pt
+tokenizer_ref: omniASR_tokenizer_written_v2_local
+
+---
+
+name: omniASR_LLM_Unlimited_1B_v2_local
+model_family: wav2vec2_llama
+model_arch: 1b_unlimited_v2
+checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-LLM-Unlimited-1B-v2.pt
+tokenizer_ref: omniASR_tokenizer_written_v2_local
+
+---
+
+name: omniASR_LLM_Unlimited_3B_v2_local
+model_family: wav2vec2_llama
+model_arch: 3b_unlimited_v2
+checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-LLM-Unlimited-3B-v2.pt
+tokenizer_ref: omniASR_tokenizer_written_v2_local
+
+---
+
+name: omniASR_LLM_Unlimited_7B_v2_local
+model_family: wav2vec2_llama
+model_arch: 7b_unlimited_v2
+checkpoint: https://dl.fbaipublicfiles.com/mms/omniASR-LLM-Unlimited-7B-v2.pt
+tokenizer_ref: omniASR_tokenizer_written_v2_local

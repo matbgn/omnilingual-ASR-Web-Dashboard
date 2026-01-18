@@ -70,11 +70,43 @@ Alternatively, you can perform the steps manually:
 ```bash
 python3.10 -m venv asr_venv
 ./asr_venv/bin/pip install --upgrade pip
+# 3. Install PyTorch and core ML libraries (Version 2.6.0 as required)
 ./asr_venv/bin/pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
+
+# 4. Install Fairseq2 (Specific Meta version)
 ./asr_venv/bin/pip install fairseq2==0.6 fairseq2n==0.6 --extra-index-url https://fair.pkg.atmeta.com/fairseq2/whl/pt2.6.0/cu124
+
+# 5. Install Dashboard Requirements
 ./asr_venv/bin/pip install -r requirements-dashboard.txt
-./asr_venv/bin/pip install omnilingual-asr --no-deps
+
+# 6. Install omnilingual-asr package
+# Use last version pulled from PyPI.
+# We use --no-deps to avoid re-triggering dependency conflicts with torch.
+./asr_venv/bin/pip install "omnilingual-asr>=0.2.0" --no-deps
+
+# 7. Install other requirements (training related)
+./asr_venv/bin/pip install -r requirements.txt
+
+# 8. Setup Local Model Card Configuration
+mkdir -p ~/.config/fairseq2/assets/cards/models
+ln -sf "$(pwd)/src/omnilingual_asr/cards/models/omniasr_local.yaml" ~/.config/fairseq2/assets/cards/models/omniasr_local.yaml
 ```
+
+### 3. Blackwell GPU Support (RTX 50 Series)
+
+If you have an **NVIDIA RTX 5090** or other Blackwell-based GPU (`sm_120`), the standard PyTorch 2.6.0/CUDA 12.4 build will not work. You need PyTorch with **CUDA 12.8** support and a compatible fairseq2 nightly build.
+
+After running `bash setup_env.sh`, replace the PyTorch and fairseq2 installations with:
+
+```bash
+# Step 1: Install PyTorch 2.9.1 with CUDA 12.8
+./asr_venv/bin/pip install torch==2.9.1 torchaudio --index-url https://download.pytorch.org/whl/cu128 --force-reinstall
+
+# Step 2: Install fairseq2 nightly for PyTorch 2.9.1 cu128
+./asr_venv/bin/pip install fairseq2 fairseq2n --pre --extra-index-url https://fair.pkg.atmeta.com/fairseq2/whl/nightly/pt2.9.1/cu128 --force-reinstall
+```
+
+> **Note**: Blackwell support requires nightly builds which may be less stable than the default configuration. Check the [fairseq2 variants](https://github.com/facebookresearch/fairseq2#variants) for updated compatibility information.
 
 ---
 
@@ -88,7 +120,8 @@ Models are managed via `fairseq2` asset cards. Ensure your configuration is crea
 
 | Identifier | Parameters | Family |
 |------------|------------|--------|
-| `omniASR_LLM_1B_local` | 1B | LLM (Default) |
+| `omniASR_LLM_Unlimited_300M_v2_local` | 300M | LLM (Default, Unlimited Length) |
+| `omniASR_LLM_1B_local` | 1B | LLM |
 | `omniASR_CTC_1B_local` | 1B | CTC (High Speed) |
 | `omniASR_LLM_3B_local` | 3B | LLM (High Accuracy) |
 

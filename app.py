@@ -145,7 +145,7 @@ class DatasetManager:
 SUPPORTED_FORMATS = {".wav", ".flac", ".ogg", ".au", ".aiff", ".mp3"}
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50MB max file size
+app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024 * 1024  # 1GB max file size
 app.config["UPLOAD_FOLDER"] = Path(tempfile.gettempdir()) / "omnilingual_asr_uploads"
 app.config["HISTORY_FILE"] = Path.home() / ".omnilingual_asr_history.json"
 
@@ -154,14 +154,38 @@ app.config["UPLOAD_FOLDER"].mkdir(parents=True, exist_ok=True)
 
 # Initialize pipeline at startup
 _pipeline: Optional[ASRInferencePipeline] = None
-DEFAULT_MODEL_CARD = "omniASR_LLM_1B_local"
+DEFAULT_MODEL_CARD = "omniASR_LLM_Unlimited_300M_v2_local"
 
-# Example: { "Display Name": "model_card_name" }
-AVAILABLE_MODELS = {
-    "LLM 1B (Default)": "omniASR_LLM_1B_local",
-    "CTC 1B": "omniASR_CTC_1B_local",
-    "LLM 3B": "omniASR_LLM_3B_local"
-    }
+def load_available_models() -> dict:
+    """
+    Dynamically load available models from the omniasr_local.yaml model card file.
+    Returns a dict of { "Display Name": "model_card_name" }.
+    """
+    import yaml
+    
+    yaml_path = Path(__file__).parent / "src" / "omnilingual_asr" / "cards" / "models" / "omniasr_local.yaml"
+    models = {}
+    
+    try:
+        with open(yaml_path, "r", encoding="utf-8") as f:
+            # Parse multi-document YAML (separated by ---)
+            for doc in yaml.safe_load_all(f):
+                # Skip tokenizers (they have tokenizer_family instead of model_family)
+                if doc and "name" in doc and "model_family" in doc and "tokenizer_family" not in doc:
+                    model_name = doc["name"]
+                    # Create human-readable display name from model card name
+                    # e.g., "omniASR_LLM_Unlimited_7B_v2_local" -> "LLM Unlimited 7B v2"
+                    display_name = model_name.replace("omniASR_", "").replace("_local", "").replace("_", " ")
+                    models[display_name] = model_name
+    except Exception as e:
+        print(f"Warning: Could not load models from YAML: {e}")
+        # Fallback to a minimal default
+        models = {"LLM Unlimited 300M v2": "omniASR_LLM_Unlimited_300M_v2_local"}
+    
+    return models
+
+# Dynamically loaded from omniasr_local.yaml
+AVAILABLE_MODELS = load_available_models()
 
 # Common language codes for the dropdown
 COMMON_LANGUAGES = [
