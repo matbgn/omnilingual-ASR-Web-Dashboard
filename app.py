@@ -145,7 +145,7 @@ class DatasetManager:
 SUPPORTED_FORMATS = {".wav", ".flac", ".ogg", ".au", ".aiff", ".mp3"}
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50MB max file size
+app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024 * 1024  # 1GB max file size
 app.config["UPLOAD_FOLDER"] = Path(tempfile.gettempdir()) / "omnilingual_asr_uploads"
 app.config["HISTORY_FILE"] = Path.home() / ".omnilingual_asr_history.json"
 
