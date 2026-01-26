@@ -201,3 +201,24 @@ def register_wav2vec2_llama_configs(container: DependencyContainer) -> None:
         config.llama_config.vocab_size = vocab_size
         config.wav2vec2_asr_config.target_vocab_size = vocab_size
         return config
+
+    @arch("7b_unlimited_v2", advanced=True)
+    def _7b_unlimited_v2(resolver: DependencyResolver) -> Wav2Vec2LlamaConfig:
+        # Use the base 7b config
+        return _7b_llama(resolver)
+
+    @arch("300m_unlimited_v2", advanced=True)
+    def _300m_unlimited_v2(resolver: DependencyResolver) -> Wav2Vec2LlamaConfig:
+        # Use the base 300m config but override dimensions to match v2 checkpoint
+        config = _300m_llama(resolver)
+        config.llama_config.ffn_inner_dim = 2816
+        
+        vocab_size = 10288
+        config.llama_config.vocab_size = vocab_size
+        config.wav2vec2_asr_config.target_vocab_size = vocab_size
+        
+        config.n_special_tokens = 3
+        config.ffn_inner_dim_scale = 1.0 # FORCE 1.0 explicitly
+        config.ffn_inner_dim_multiple_of = 1
+        return config
+

@@ -11,3 +11,5 @@ evaluate
 pandas
 tensorboard
 ipywidgets
+pyannote.audio
+pyannote-whisper

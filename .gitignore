@@ -53,3 +53,11 @@ build/
 *.swp
 *.bak
 ~*
+
+.hf_token
+
+# Ralph orchestrator
+ralph.yml
+.ralph
+.sop
+PROMPT.md

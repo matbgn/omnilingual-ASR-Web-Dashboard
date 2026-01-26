@@ -21,6 +21,7 @@
                 <button class="nav-tab active" data-tab="transcribe">Transcribe</button>
                 <button class="nav-tab" data-tab="long_audio">Long Audio</button>
                 <button class="nav-tab" data-tab="contribute">Contribute Data</button>
+                <button class="nav-tab" data-tab="settings">Settings</button>
             </div>
 
             <!-- Transcribe Section (Existing) -->
@@ -62,6 +63,29 @@
                         </select>
                     </div>
 
+                    <!-- Diarization Options -->
+                    <div class="diarization-options" id="diarizationOptions" style="display: none;">
+                        <div class="diarization-toggle-row">
+                            <label class="toggle-label" for="enableDiarization">
+                                <input type="checkbox" id="enableDiarization" class="toggle-checkbox">
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-text">Enable Speaker Diarization</span>
+                                <span class="tooltip-icon" title="Identifies who spoke when in the audio. Requires HuggingFace token (see Settings).">?</span>
+                            </label>
+                        </div>
+                        <div class="speaker-count-row" id="speakerCountRow" style="display: none;">
+                            <label for="speakerCount">Number of speakers (optional):</label>
+                            <input type="number" id="speakerCount" class="speaker-count-input" min="1" max="10" placeholder="Auto-detect">
+                            <span class="input-help">Leave empty for auto-detection</span>
+                        </div>
+                    </div>
+
+                    <!-- Diarization Unavailable Notice -->
+                    <div class="diarization-notice" id="diarizationNotice" style="display: none;">
+                        <span class="notice-icon">i</span>
+                        <span class="notice-text">Speaker diarization is available. <a href="#" id="enableDiarizationLink">Enable it</a> to identify speakers.</span>
+                    </div>
+
                     <!-- Process Button -->
                     <button class="btn btn-process" id="processBtn" disabled>
                         <span class="btn-text">Transcribe File</span>
@@ -100,13 +124,41 @@
                 <section class="results-section" id="resultsSection" style="display: none;">
                     <div class="result-header">
                         <h2>Transcription Result</h2>
-                        <button class="btn btn-secondary" id="downloadBtn">Download as Text</button>
+                        <div class="export-controls" id="exportControls">
+                            <select id="exportFormatSelect" class="export-format-select">
+                                <option value="inline">Plain Text</option>
+                                <option value="timestamped">Timestamped</option>
+                                <option value="json">JSON</option>
+                                <option value="srt">SRT Subtitles</option>
+                            </select>
+                            <button class="btn btn-secondary" id="downloadBtn">Download</button>
+                        </div>
                     </div>
                     <div class="result-content">
                         <div class="result-meta">
                             <span id="resultFilename"></span>
                             <span id="resultLang"></span>
                         </div>
+
+                        <!-- Progress Bar for Diarization -->
+                        <div class="diarization-progress" id="diarizationProgress" style="display: none;">
+                            <div class="progress-header">
+                                <span class="progress-stage" id="progressStage">Initializing...</span>
+                                <span class="progress-percent" id="progressPercent">0%</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>
+                            </div>
+                            <div class="progress-details" id="progressDetails"></div>
+                        </div>
+
+                        <!-- SSE Error Display -->
+                        <div class="sse-error" id="sseError" style="display: none;">
+                            <span class="error-icon">!</span>
+                            <span class="error-message" id="sseErrorMessage"></span>
+                            <button class="btn btn-link retry-btn" id="sseRetryBtn">Retry</button>
+                        </div>
+
                         <div class="result-text" id="resultText"></div>
                     </div>
                 </section>
@@ -249,6 +301,70 @@
                     </div>
                     <div class="history-list" id="contributionList">
                         <p class="empty-state">No contributions yet.</p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Settings Section -->
+            <div id="settingsTab" class="tab-content">
+                <section class="settings-section">
+                    <h2>Settings</h2>
+
+                    <!-- Diarization Settings -->
+                    <div class="settings-group">
+                        <h3>Speaker Diarization</h3>
+                        <p class="settings-description">
+                            Speaker diarization identifies who spoke when in an audio recording.
+                            This feature requires a HuggingFace access token.
+                        </p>
+
+                        <div class="diarization-status" id="diarizationStatus">
+                            <div class="status-indicator" id="diarizationIndicator">
+                                <span class="status-dot unavailable"></span>
+                                <span class="status-text">Checking status...</span>
+                            </div>
+                        </div>
+
+                        <div class="settings-form">
+                            <div class="form-group">
+                                <label for="hfTokenInput">HuggingFace Access Token</label>
+                                <div class="token-input-group">
+                                    <input type="password" id="hfTokenInput" class="form-input"
+                                           placeholder="hf_..." autocomplete="off">
+                                    <button type="button" class="btn btn-icon toggle-visibility" id="toggleTokenVisibility" title="Show/Hide token">
+                                        👁️
+                                    </button>
+                                </div>
+                                <p class="form-help">
+                                    Get your token from
+                                    <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">
+                                        huggingface.co/settings/tokens
+                                    </a>
+                                </p>
+                            </div>
+
+                            <div class="form-actions">
+                                <button class="btn btn-primary" id="saveHfTokenBtn">Save Token</button>
+                            </div>
+
+                            <div id="tokenSaveMessage" class="settings-message"></div>
+                        </div>
+
+                        <div class="settings-info">
+                            <h4>Required Setup</h4>
+                            <ol>
+                                <li>Create a HuggingFace account at <a href="https://huggingface.co/join" target="_blank" rel="noopener">huggingface.co/join</a></li>
+                                <li>Accept the license agreement for:
+                                    <ul>
+                                        <li><a href="https://huggingface.co/pyannote/speaker-diarization-3.1" target="_blank" rel="noopener">pyannote/speaker-diarization-3.1</a></li>
+                                        <li><a href="https://huggingface.co/pyannote/segmentation-3.0" target="_blank" rel="noopener">pyannote/segmentation-3.0</a></li>
+                                        <li><a href="https://huggingface.co/pyannote/speaker-diarization-community-1" target="_blank" rel="noopener">pyannote/speaker-diarization-community-1</a></li>
+                                    </ul>
+                                </li>
+                                <li>Create an access token with "Read" permissions at <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">huggingface.co/settings/tokens</a></li>
+                                <li>Paste the token above and click "Save Token"</li>
+                            </ol>
+                        </div>
                     </div>
                 </section>
             </div>

@@ -99,9 +99,13 @@ document.addEventListener('DOMContentLoaded', function () {
             if (tabId === 'transcribe') {
                 document.getElementById('transcribeTab').classList.add('active');
                 fetchModels(); // Refresh models when switching to transcribe
+                checkDiarizationAvailability(); // Re-check diarization availability
             } else if (tabId === 'long_audio') {
                 document.getElementById('longAudioTab').classList.add('active');
                 fetchModels(); // Refresh models when switching to long audio
+            } else if (tabId === 'settings') {
+                document.getElementById('settingsTab').classList.add('active');
+                loadDiarizationSettings(); // Refresh diarization status
             } else {
                 document.getElementById('contributeTab').classList.add('active');
                 if (prompts.length === 0) loadPrompts();
@@ -295,12 +299,28 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        // Check if diarization is enabled
+        const useDiarization = enableDiarization && enableDiarization.checked && diarizationAvailable;
+
         // Disable button and show loading
         processBtn.disabled = true;
         const btnText = processBtn.querySelector('.btn-text');
         const btnSpinner = processBtn.querySelector('.btn-spinner');
         btnText.style.display = 'none';
         btnSpinner.style.display = 'inline';
+
+        if (useDiarization) {
+            // Use SSE streaming endpoint for diarization
+            await handleDiarizedTranscribe();
+        } else {
+            // Use standard endpoint
+            await handleStandardTranscribe();
+        }
+    }
+
+    async function handleStandardTranscribe() {
+        const btnText = processBtn.querySelector('.btn-text');
+        const btnSpinner = processBtn.querySelector('.btn-spinner');
 
         const formData = new FormData();
         formData.append('file', currentFile);
@@ -341,22 +361,323 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    async function handleDiarizedTranscribe() {
+        const btnText = processBtn.querySelector('.btn-text');
+        const btnSpinner = processBtn.querySelector('.btn-spinner');
+
+        // Get speaker count if specified
+        const numSpeakers = speakerCountInput && speakerCountInput.value ? parseInt(speakerCountInput.value, 10) : null;
+
+        // Prepare form data
+        const formData = new FormData();
+        formData.append('file', currentFile);
+        formData.append('lang_code', langSelect.value);
+        if (numSpeakers && numSpeakers >= 1 && numSpeakers <= 10) {
+            formData.append('num_speakers', numSpeakers);
+        }
+
+        // Reset progress and error states
+        showProgress(true);
+        hideSSEError();
+        updateProgress('Initializing...', 0);
+        currentDiarizationRetryCount = 0;
+        speakerLabelMap = {}; // Reset speaker labels for new transcription
+        currentSegments = [];
+
+        try {
+            // Submit file and get SSE stream
+            const response = await fetch('/api/transcribe_with_diarization', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Diarization failed');
+            }
+
+            // For SSE streaming, the response is text/event-stream
+            // We need to handle it with EventSource or read the stream
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let segments = [];
+
+            // Show results section and prepare for streaming
+            resultFilename.textContent = `📄 ${currentFile.name}`;
+            resultLang.textContent = `🌐 ${langSelect.value}`;
+            resultText.textContent = '';
+            resultsSection.style.display = 'block';
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                // Parse SSE events from buffer
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const eventData = JSON.parse(line.slice(6));
+                            handleDiarizationEvent(eventData, segments);
+                        } catch (e) {
+                            console.warn('Failed to parse SSE event:', line);
+                        }
+                    }
+                }
+            }
+
+            // Process any remaining buffer
+            if (buffer.startsWith('data: ')) {
+                try {
+                    const eventData = JSON.parse(buffer.slice(6));
+                    handleDiarizationEvent(eventData, segments);
+                } catch (e) {
+                    // Ignore incomplete data
+                }
+            }
+
+            // Reload history
+            loadHistory();
+
+        } catch (error) {
+            console.error('Diarization error:', error);
+
+            // Handle SSE connection errors with retry option
+            if (error.name === 'TypeError' || error.message.includes('network') || error.message.includes('fetch')) {
+                showSSEError('Connection lost. Please check your network and try again.');
+            } else {
+                showSSEError(error.message);
+            }
+
+            showProgress(false);
+        } finally {
+            // Re-enable button
+            processBtn.disabled = false;
+            btnText.style.display = 'inline';
+            btnSpinner.style.display = 'none';
+        }
+    }
+
+    function showProgress(show) {
+        if (diarizationProgress) {
+            diarizationProgress.style.display = show ? 'block' : 'none';
+        }
+    }
+
+    function updateProgress(stage, percent, details = '') {
+        if (progressStage) {
+            progressStage.textContent = stage;
+        }
+        if (progressPercent) {
+            progressPercent.textContent = `${Math.round(percent)}%`;
+        }
+        if (progressBarFill) {
+            progressBarFill.style.width = `${percent}%`;
+            if (percent < 100) {
+                progressBarFill.classList.add('animating');
+            } else {
+                progressBarFill.classList.remove('animating');
+            }
+        }
+        if (progressDetails) {
+            progressDetails.textContent = details;
+        }
+    }
+
+    function showSSEError(message) {
+        if (sseError) {
+            sseError.style.display = 'flex';
+        }
+        if (sseErrorMessage) {
+            sseErrorMessage.textContent = message;
+        }
+    }
+
+    function hideSSEError() {
+        if (sseError) {
+            sseError.style.display = 'none';
+        }
+    }
+
+    function handleDiarizationEvent(eventData, segments) {
+        const eventType = eventData.event || eventData.type;
+
+        switch (eventType) {
+            case 'progress':
+                // Update progress bar with stage-aware display
+                const stage = eventData.stage || 'processing';
+                const progress = eventData.progress || 0;
+                const progressPercent = Math.round(progress * 100);
+
+                // Map internal stages to user-friendly display
+                let displayStage = 'Processing...';
+                let details = '';
+
+                if (stage === 'diarizing' || stage === 'diarization') {
+                    displayStage = 'Identifying speakers...';
+                    details = 'Analyzing audio to detect speaker turns';
+                } else if (stage === 'transcribing' || stage === 'transcription') {
+                    displayStage = 'Transcribing speech...';
+                    const currentTurn = eventData.current_turn || 0;
+                    const totalTurns = eventData.total_turns || 0;
+                    if (totalTurns > 0) {
+                        details = `Segment ${currentTurn} of ${totalTurns}`;
+                    }
+                } else if (stage === 'loading') {
+                    displayStage = 'Loading models...';
+                    details = 'Preparing diarization pipeline';
+                } else if (stage === 'extracting') {
+                    displayStage = 'Extracting audio...';
+                    details = 'Preparing audio segments for transcription';
+                } else if (stage === 'finalizing') {
+                    displayStage = 'Finalizing...';
+                    details = 'Assembling final transcript';
+                }
+
+                updateProgress(displayStage, progressPercent, details);
+                break;
+
+            case 'segment':
+                // Add segment to results and update display
+                segments.push(eventData);
+                updateDiarizedDisplay(segments);
+                break;
+
+            case 'complete':
+                // Final result received - hide progress bar
+                showProgress(false);
+                currentTranscription = eventData.full_transcript || segments.map(s => `[${s.speaker}] ${s.text}`).join('\n');
+                currentHistoryId = eventData.history_id !== undefined ? eventData.history_id : null;
+                updateDiarizedDisplay(segments);
+                break;
+
+            case 'error':
+                // Show error in SSE error display
+                showProgress(false);
+                showSSEError(eventData.message || 'Unknown error occurred');
+                break;
+        }
+    }
+
+    function updateDiarizedDisplay(segments) {
+        if (segments.length === 0) {
+            resultText.textContent = 'Processing...';
+            return;
+        }
+
+        // Store segments for re-rendering after label edits
+        currentSegments = segments;
+
+        // Build speaker-attributed transcript display with editable labels
+        const html = segments.map((seg, index) => {
+            const originalSpeaker = seg.speaker || 'Unknown';
+            const displaySpeaker = speakerLabelMap[originalSpeaker] || originalSpeaker;
+            const text = seg.text || '';
+            const startTime = seg.start !== undefined ? formatTimestamp(seg.start) : '';
+            const endTime = seg.end !== undefined ? formatTimestamp(seg.end) : '';
+            const timeRange = startTime && endTime ? `[${startTime} - ${endTime}]` : '';
+            return `<div class="diarization-segment" data-speaker-id="${escapeHtml(originalSpeaker)}">
+                <span class="speaker-label-container">
+                    <span class="speaker-label editable" data-original-speaker="${escapeHtml(originalSpeaker)}" title="Click to edit speaker name">${escapeHtml(displaySpeaker)}</span>
+                    <button class="btn-edit-speaker" data-speaker="${escapeHtml(originalSpeaker)}" title="Rename speaker">&#9998;</button>
+                </span>
+                ${timeRange ? ` <span class="time-range">${timeRange}</span>` : ''}
+                <br><span class="segment-text">${escapeHtml(text)}</span>
+            </div>`;
+        }).join('');
+
+        resultText.innerHTML = html;
+
+        // Update currentTranscription with custom labels
+        currentTranscription = segments.map(s => {
+            const displaySpeaker = speakerLabelMap[s.speaker] || s.speaker;
+            return `[${displaySpeaker}] ${s.text}`;
+        }).join('\n');
+
+        // Add event listeners for edit buttons
+        attachSpeakerEditListeners();
+    }
+
+    function attachSpeakerEditListeners() {
+        document.querySelectorAll('.btn-edit-speaker').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const originalSpeaker = btn.dataset.speaker;
+                openSpeakerEditDialog(originalSpeaker);
+            });
+        });
+
+        // Also allow clicking on the speaker label itself
+        document.querySelectorAll('.speaker-label.editable').forEach(label => {
+            label.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const originalSpeaker = label.dataset.originalSpeaker;
+                openSpeakerEditDialog(originalSpeaker);
+            });
+        });
+    }
+
+    function openSpeakerEditDialog(originalSpeaker) {
+        const currentName = speakerLabelMap[originalSpeaker] || originalSpeaker;
+        const newName = prompt(`Rename speaker "${originalSpeaker}":\n(This will update all occurrences)`, currentName);
+
+        if (newName !== null && newName.trim() !== '') {
+            const trimmedName = newName.trim();
+            if (trimmedName !== originalSpeaker) {
+                speakerLabelMap[originalSpeaker] = trimmedName;
+            } else {
+                // If user sets it back to original, remove from map
+                delete speakerLabelMap[originalSpeaker];
+            }
+            // Re-render with updated labels
+            updateDiarizedDisplay(currentSegments);
+        }
+    }
+
+    function resetSpeakerLabels() {
+        speakerLabelMap = {};
+        if (currentSegments.length > 0) {
+            updateDiarizedDisplay(currentSegments);
+        }
+    }
+
+    function formatTimestamp(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = (seconds % 60).toFixed(1);
+        return `${String(mins).padStart(2, '0')}:${String(secs).padStart(4, '0')}`;
+    }
+
     function handleDownload() {
         if (!currentTranscription) {
             alert('No transcription to download');
             return;
         }
 
+        // Get selected export format
+        const exportFormatSelect = document.getElementById('exportFormatSelect');
+        const format = exportFormatSelect ? exportFormatSelect.value : 'inline';
+
         // Find the history entry for current transcription
         if (currentHistoryId !== null) {
-            window.location.href = `/api/download/${currentHistoryId}`;
+            // Include speaker renames in the export request
+            let url = `/api/history/${currentHistoryId}/export?format=${format}`;
+            if (Object.keys(speakerLabelMap).length > 0) {
+                url += `&speaker_labels=${encodeURIComponent(JSON.stringify(speakerLabelMap))}`;
+            }
+            window.location.href = url;
         } else {
-            // Create a temporary download
+            // Create a temporary download for non-history transcriptions
             const blob = new Blob([currentTranscription], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `transcription_${currentFile?.name || 'audio'}.txt`;
+            const ext = format === 'json' ? '.json' : format === 'srt' ? '.srt' : '.txt';
+            a.download = `transcription_${currentFile?.name || 'audio'}${ext}`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -1163,7 +1484,232 @@ document.addEventListener('DOMContentLoaded', function () {
     modePresetBtn.addEventListener('click', () => setCollectionMode('preset'));
     modeCustomBtn.addEventListener('click', () => setCollectionMode('custom'));
 
+    /* --- Diarization Options Management --- */
+
+    // Diarization UI Elements
+    const diarizationOptions = document.getElementById('diarizationOptions');
+    const diarizationNotice = document.getElementById('diarizationNotice');
+    const enableDiarization = document.getElementById('enableDiarization');
+    const speakerCountRow = document.getElementById('speakerCountRow');
+    const speakerCountInput = document.getElementById('speakerCount');
+    const enableDiarizationLink = document.getElementById('enableDiarizationLink');
+
+    // Progress Bar Elements
+    const diarizationProgress = document.getElementById('diarizationProgress');
+    const progressStage = document.getElementById('progressStage');
+    const progressPercent = document.getElementById('progressPercent');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const progressDetails = document.getElementById('progressDetails');
+
+    // SSE Error Elements
+    const sseError = document.getElementById('sseError');
+    const sseErrorMessage = document.getElementById('sseErrorMessage');
+    const sseRetryBtn = document.getElementById('sseRetryBtn');
+
+    // Diarization state
+    let diarizationAvailable = false;
+    let currentDiarizationRetryCount = 0;
+    const MAX_SSE_RETRIES = 3;
+    let speakerLabelMap = {}; // Maps original speaker ID (e.g., SPEAKER_00) to custom name
+    let currentSegments = []; // Store current segments for re-rendering after label edits
+
+    async function checkDiarizationAvailability() {
+        try {
+            const response = await fetch('/api/settings/diarization');
+            const data = await response.json();
+
+            diarizationAvailable = data.diarization_available === true;
+
+            if (diarizationAvailable) {
+                // Show diarization options
+                if (diarizationOptions) diarizationOptions.style.display = 'block';
+                if (diarizationNotice) diarizationNotice.style.display = 'none';
+            } else if (data.hf_token_set) {
+                // Token set but not available (license not accepted)
+                if (diarizationOptions) diarizationOptions.style.display = 'none';
+                if (diarizationNotice) {
+                    diarizationNotice.style.display = 'none'; // Don't show notice if token issues
+                }
+            } else {
+                // No token set
+                if (diarizationOptions) diarizationOptions.style.display = 'none';
+                if (diarizationNotice) diarizationNotice.style.display = 'none';
+            }
+        } catch (e) {
+            console.error('Failed to check diarization availability', e);
+            if (diarizationOptions) diarizationOptions.style.display = 'none';
+            if (diarizationNotice) diarizationNotice.style.display = 'none';
+        }
+    }
+
+    function toggleSpeakerCountVisibility() {
+        if (!enableDiarization || !speakerCountRow) return;
+
+        if (enableDiarization.checked) {
+            speakerCountRow.style.display = 'flex';
+        } else {
+            speakerCountRow.style.display = 'none';
+            if (speakerCountInput) speakerCountInput.value = '';
+        }
+    }
+
+    // Event listeners for diarization options
+    if (enableDiarization) {
+        enableDiarization.addEventListener('change', toggleSpeakerCountVisibility);
+    }
+
+    if (enableDiarizationLink) {
+        enableDiarizationLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (enableDiarization) {
+                enableDiarization.checked = true;
+                toggleSpeakerCountVisibility();
+            }
+        });
+    }
+
+    // SSE Retry Button
+    if (sseRetryBtn) {
+        sseRetryBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            currentDiarizationRetryCount++;
+            if (currentDiarizationRetryCount <= MAX_SSE_RETRIES) {
+                hideSSEError();
+                handleTranscribe();
+            } else {
+                showSSEError('Maximum retry attempts reached. Please try again later.');
+            }
+        });
+    }
+
+    /* --- Settings Management --- */
+
+    // Settings Elements
+    const hfTokenInput = document.getElementById('hfTokenInput');
+    const saveHfTokenBtn = document.getElementById('saveHfTokenBtn');
+    const toggleTokenVisibility = document.getElementById('toggleTokenVisibility');
+    const tokenSaveMessage = document.getElementById('tokenSaveMessage');
+    const diarizationIndicator = document.getElementById('diarizationIndicator');
+
+    async function loadDiarizationSettings() {
+        if (!diarizationIndicator) return;
+
+        try {
+            const response = await fetch('/api/settings/diarization');
+            const data = await response.json();
+
+            updateDiarizationStatus(data);
+        } catch (e) {
+            console.error('Failed to load diarization settings', e);
+            updateDiarizationStatus({ error: 'Failed to check status' });
+        }
+    }
+
+    function updateDiarizationStatus(data) {
+        if (!diarizationIndicator) return;
+
+        const statusDot = diarizationIndicator.querySelector('.status-dot');
+        const statusText = diarizationIndicator.querySelector('.status-text');
+
+        if (data.error) {
+            statusDot.className = 'status-dot error';
+            statusText.textContent = 'Error: ' + data.error;
+            return;
+        }
+
+        if (data.diarization_available) {
+            statusDot.className = 'status-dot available';
+            statusText.textContent = 'Diarization available';
+        } else if (data.hf_token_set) {
+            statusDot.className = 'status-dot pending';
+            statusText.textContent = 'Token set, but model not available (check license agreements)';
+        } else {
+            statusDot.className = 'status-dot unavailable';
+            statusText.textContent = 'Diarization unavailable (token not set)';
+        }
+    }
+
+    async function saveHfToken() {
+        if (!hfTokenInput || !tokenSaveMessage) return;
+
+        const token = hfTokenInput.value.trim();
+
+        if (!token) {
+            showTokenMessage('Please enter a token', 'error');
+            return;
+        }
+
+        saveHfTokenBtn.disabled = true;
+        saveHfTokenBtn.textContent = 'Saving...';
+
+        try {
+            const response = await fetch('/api/settings/hf_token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: token })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showTokenMessage('Token saved successfully!', 'success');
+                hfTokenInput.value = ''; // Clear input for security
+                loadDiarizationSettings(); // Refresh status
+            } else {
+                throw new Error(data.error || 'Failed to save token');
+            }
+        } catch (e) {
+            showTokenMessage('Error: ' + e.message, 'error');
+        } finally {
+            saveHfTokenBtn.disabled = false;
+            saveHfTokenBtn.textContent = 'Save Token';
+        }
+    }
+
+    function showTokenMessage(message, type) {
+        if (!tokenSaveMessage) return;
+
+        tokenSaveMessage.textContent = message;
+        tokenSaveMessage.className = 'settings-message ' + type;
+
+        // Clear message after 5 seconds
+        setTimeout(() => {
+            tokenSaveMessage.textContent = '';
+            tokenSaveMessage.className = 'settings-message';
+        }, 5000);
+    }
+
+    function toggleTokenInputVisibility() {
+        if (!hfTokenInput || !toggleTokenVisibility) return;
+
+        if (hfTokenInput.type === 'password') {
+            hfTokenInput.type = 'text';
+            toggleTokenVisibility.textContent = '🙈';
+        } else {
+            hfTokenInput.type = 'password';
+            toggleTokenVisibility.textContent = '👁️';
+        }
+    }
+
+    // Settings Event Listeners
+    if (saveHfTokenBtn) {
+        saveHfTokenBtn.addEventListener('click', saveHfToken);
+    }
+
+    if (toggleTokenVisibility) {
+        toggleTokenVisibility.addEventListener('click', toggleTokenInputVisibility);
+    }
+
+    if (hfTokenInput) {
+        hfTokenInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                saveHfToken();
+            }
+        });
+    }
+
     // Initialize
     fetchModels();
     loadHistory();
+    checkDiarizationAvailability();
 });

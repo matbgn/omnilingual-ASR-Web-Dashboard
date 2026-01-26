@@ -159,7 +159,7 @@ class OmnilingualASRLLamaFactory(LLaMAFactory):
             config.model_dim,
             ffn_inner_dim,
             bias=False,
-            inner_dim_scale=config.ffn_inner_dim_scale,
+            inner_dim_scale=1.0,
             inner_dim_to_multiple=config.ffn_inner_dim_multiple_of,
             proj_init_fn=init_projection,
             # omnilingual_asr-specific change

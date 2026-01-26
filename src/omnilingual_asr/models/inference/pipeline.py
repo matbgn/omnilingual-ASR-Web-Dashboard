@@ -54,19 +54,18 @@ AudioInput = (
     | List[Dict[str, Any]]
 )
 
-MAX_ALLOWED_AUDIO_SEC: Final = 40
-
+MAX_ALLOWED_AUDIO_SEC: Final = 36000  # 10 hours
 
 @dataclass
 class ContextExample:
     """
     Represents a single context example with audio and text.
-
+    
     Args:
         audio: Audio input (same formats as AudioInput)
         text: Corresponding text transcription
     """
-
+    
     audio: str | Path | bytes | NDArray[np.int8] | Dict[str, Any]
     text: str
 
@@ -133,6 +132,8 @@ def repeat_to_max_len(
 def assert_max_length(
     audio_data: Dict[str, Any], target_sample_rate: int = 16000
 ) -> Dict[str, Any]:
+    # We essentially disable this check by setting MAX_ALLOWED_AUDIO_SEC very high.
+    # But for safety, keep the logic if someone changes the constant back.
     waveform = audio_data["waveform"]
     current_sample_rate = audio_data["sample_rate"]
     waveform_len_s = len(waveform) / current_sample_rate
